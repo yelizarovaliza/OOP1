@@ -3,9 +3,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
-#include <cstdio>
 #include <unordered_map>
-#include <unordered_set>
 #include <memory>
 
 using namespace std;
@@ -54,7 +52,6 @@ public:
             flights.push_back(flight);
         }
 
-        file.close();
         return flights;
     }
 
@@ -174,7 +171,7 @@ class Ticket {
 private:
     string id;
     string passengerName;
-    string flightDate; // Added flightDate
+    string flightDate;
     string flightNumber;
     string seatNumber;
     bool isBooked;
@@ -218,7 +215,6 @@ public:
         return seatNumber;
     }
 };
-
 
 // Class to handle user commands and validate input
 class FlightCommandHandler {
@@ -266,9 +262,9 @@ private:
 
         Airplane* airplane = findFlight(date, flightNo);
         if (airplane) {
-            const auto& seatMap = airplane->getBookedSeats(); // Retrieve booked seats
+            const auto& seatMap = airplane->getBookedSeats();
             bool availableSeats = false;
-            int seatsPerRow = airplane->getSeatsPerRow(); // Use the getter to access seats per row
+            int seatsPerRow = airplane->getSeatsPerRow();
 
             for (int row = 1; row <= 50; ++row) { // Assuming 50 rows; adjust if necessary
                 for (char seat = 'A'; seat < 'A' + seatsPerRow; ++seat) {
@@ -408,7 +404,6 @@ private:
         }
     }
 
-
     Airplane* findFlight(const string& date, const string& flightNo) {
         for (auto& airplane : airplanes) {
             if (airplane.getDate() == date && airplane.getFlightNumber() == flightNo) {
@@ -417,7 +412,6 @@ private:
         }
         return nullptr;
     }
-
 
     int getSeatPrice(const string& seat, const Airplane& airplane) {
         int row = stoi(seat.substr(0, seat.size() - 1));
@@ -430,7 +424,7 @@ class FlightBookingApp {
 private:
     vector<Airplane> airplanes;
     Parser parser;
-    FlightCommandHandler* commandHandler;
+    unique_ptr<FlightCommandHandler> commandHandler;
 
     void loadFlights() {
         vector<FlightInfo> flights = parser.parseFromFile("C:/Users/User/Documents/GitHub/OOP1/Console1/config.txt");
@@ -438,18 +432,15 @@ private:
             airplanes.emplace_back(flight);
         }
     }
-public:
-    FlightBookingApp() : commandHandler(nullptr) {}
 
-    ~FlightBookingApp() {
-        delete commandHandler;
-    }
+public:
+    FlightBookingApp() {}
 
     void run() {
         loadFlights();
-        commandHandler = new FlightCommandHandler(airplanes);
+        commandHandler = make_unique<FlightCommandHandler>(airplanes);
         commandHandler->handleCommands();
-    }    
+    }
 };
 
 int main() {
