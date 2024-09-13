@@ -16,6 +16,16 @@ struct FlightInfo {
     string flightNumber;
     int seatsPerRow;
     vector<pair<int, int>> rowPricePairs;
+
+    int getNumRows() const {
+        int maxRow = 0;
+        for (const auto& pair : rowPricePairs) {
+            if (pair.first > maxRow) {
+                maxRow = pair.first;
+            }
+        }
+        return maxRow;
+    }
 };
 
 // Parser class for reading and parsing flight data from a file
@@ -113,11 +123,13 @@ public:
     }
 
     void initializeSeatMap() {
-        int numRows = 50; // Assuming 50 rows; adjust if necessary
+        int numRows = flightInfo.getNumRows();
+        int seatsPerRow = flightInfo.seatsPerRow;
+
         seatMap.resize(numRows);
 
         for (int i = 0; i < numRows; ++i) {
-            seatMap[i].resize(flightInfo.seatsPerRow, " ");
+            seatMap[i].resize(seatsPerRow, " ");
         }
     }
 
@@ -310,7 +322,6 @@ private:
         }
     }
 
-
     void handleReturnCommand() {
         string ticketId;
         cin >> ticketId;
@@ -386,7 +397,6 @@ private:
         for (const auto& pair : tickets) {
             const auto& ticket = pair.second;
 
-            // Check if the ticket's flight details match the provided flight date and flight number
             if (ticket->getDate() == flightDate && ticket->getFlightNumber() == flightNumber) {
                 ticket->displayTicket();
                 found = true;
