@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#include <unordered_map>
 
 using namespace std;
 
@@ -13,14 +14,6 @@ struct FlightInfo {
     string flightNumber;
     int seatsPerRow;
     vector<pair<int, int>> rowPricePairs;
-
-    void display() const {
-        cout << "Date: " << date << ", Flight: " << flightNumber
-            << ", Seats per row: " << seatsPerRow << endl;
-        for (const auto& rowPrice : rowPricePairs) {
-            cout << "Rows: 1-" << rowPrice.first << ", Price: " << rowPrice.second << "$" << endl;
-        }
-    }
 };
 
 // Parser class for reading and parsing flight data from a file
@@ -30,35 +23,26 @@ public:
         ifstream file(filename);
         if (!file.is_open()) {
             cerr << "Error opening file: " << filename << endl;
-            std::perror("Error");
             return {};
         }
 
         vector<FlightInfo> flights;
         int numberOfRecords;
         file >> numberOfRecords;
-        if (file.fail()) {
-            cerr << "Error reading the number of records!" << endl;
-            file.close();
-            return {};
-        }
-        file.ignore();  // Ignore the remaining newline after numberOfRecords
+        file.ignore(); // Ignore newline character after numberOfRecords
 
         for (int i = 0; i < numberOfRecords; ++i) {
             FlightInfo flight;
             file >> flight.date >> flight.flightNumber >> flight.seatsPerRow;
-            if (file.fail()) {
-                cerr << "Error reading flight information for record " << i + 1 << endl;
-                file.close();
-                return {};
-            }
-            file.ignore();  // Ignore the space or newline before row price data
+            file.ignore(); // Ignore the remaining newline
 
             string rowPriceData;
             getline(file, rowPriceData);
+            cout << "Parsing row price data: " << rowPriceData << endl; // Debug output
             parseRowPrices(rowPriceData, flight);
             flights.push_back(flight);
         }
+
         file.close();
         return flights;
     }
@@ -71,18 +55,27 @@ private:
         char dollarSign;
 
         while (ss >> rowRange >> price >> dollarSign) {
+            if (dollarSign != '$') {
+                cerr << "Invalid price format!" << endl;
+                continue;
+            }
+
             size_t dashPos = rowRange.find('-');
             if (dashPos != string::npos) {
                 int rowStart = stoi(rowRange.substr(0, dashPos));
                 int rowEnd = stoi(rowRange.substr(dashPos + 1));
 
-                // Add price for each row in the range
                 for (int row = rowStart; row <= rowEnd; ++row) {
                     flight.rowPricePairs.push_back(make_pair(row, price));
                 }
             }
+            else {
+                cerr << "Invalid row range format!" << endl;
+            }
         }
     }
+
+
 };
 
 // Airplane class for handling seat availability, booking, and returning tickets
@@ -110,11 +103,28 @@ public:
     }
 
     void initializeSeatMap() {
-        // Initialize seat map based on flightInfo and seatsPerRow
+        int numRows = 50; // Adjust as needed or derive from flight info
+        seatMap.resize(numRows);
+
+        for (int i = 0; i < numRows; ++i) {
+            seatMap[i].resize(flightInfo.seatsPerRow);
+            for (int j = 0; j < flightInfo.seatsPerRow; ++j) {
+                seatMap[i][j] = " "; // Initialize all seats as available
+            }
+        }
     }
 
+
     void displayFlightDetails() const {
-        flightInfo.display();
+        // Logic to display flight details
+    }
+
+    const string& getFlightNumber() const {
+        return flightInfo.flightNumber;
+    }
+
+    const string& getDate() const {
+        return flightInfo.date;
     }
 };
 
@@ -127,6 +137,8 @@ private:
     bool isBooked;
 
 public:
+    Ticket() : passengerName(""), flightNumber(""), seatNumber(""), isBooked(false) {}
+
     Ticket(const string& passenger, const string& flight, const string& seat)
         : passengerName(passenger), flightNumber(flight), seatNumber(seat), isBooked(true) {}
 
@@ -138,33 +150,28 @@ public:
     void cancelBooking() {
         isBooked = false;
     }
+
+    const string& getPassengerName() const {
+        return passengerName;
+    }
 };
 
-// Main application controller class
-class FlightBookingApp {
+
+// Class to handle user commands and validate input
+class FlightCommandHandler {
 private:
-    vector<Airplane> airplanes;
-    Parser parser;
+    vector<Airplane>& airplanes;
+    unordered_map<string, Ticket> tickets;
 
 public:
-    void run() {
-        loadFlights();
-        handleUserCommands();
-    }
+    FlightCommandHandler(vector<Airplane>& airplanes) : airplanes(airplanes) {}
 
-private:
-    void loadFlights() {
-        vector<FlightInfo> flights = parser.parseFromFile("C:/Users/User/Documents/GitHub/OOP1/Console1/config.txt");
-        for (const auto& flight : flights) {
-            airplanes.emplace_back(flight);
-        }
-    }
-
-    void handleUserCommands() {
+    void handleCommands() {
         string command;
         while (true) {
             cout << "> ";
             cin >> command;
+
             if (command == "exit") {
                 break;
             }
@@ -180,29 +187,134 @@ private:
             else if (command == "view") {
                 handleViewCommand();
             }
-            else if (command == "exit") {
-                break;
-            }
             else {
                 cout << "Unknown command!" << endl;
             }
         }
     }
 
+private:
     void handleCheckCommand() {
-        // Check available seats logic
+        string date, flightNo;
+        cin >> date >> flightNo;
+
+        cout << "Checking flight with date: " << date << " and flight number: " << flightNo << endl;
+
+        Airplane* airplane = findFlight(date, flightNo);
+        if (airplane) {
+            airplane->checkAvailability();
+        }
+        else {
+            cout << "Flight not found!" << endl;
+        }
     }
 
+
+
     void handleBookCommand() {
-        // Booking logic
+        string date, flightNo, seat, passengerName;
+        cin >> date >> flightNo >> seat >> passengerName;
+
+        Airplane* airplane = findFlight(date, flightNo);
+        if (airplane) {
+            bool success = airplane->bookSeat(seat, passengerName);
+            if (success) {
+                Ticket ticket(passengerName, flightNo, seat);
+                tickets[seat] = ticket;
+                cout << "Booking confirmed for " << passengerName << endl;
+            }
+            else {
+                cout << "Booking failed. Seat may be unavailable." << endl;
+            }
+        }
+        else {
+            cout << "Flight not found!" << endl;
+        }
     }
 
     void handleReturnCommand() {
-        // Ticket return logic
+        string seat;
+        cin >> seat;
+
+        auto it = tickets.find(seat);
+        if (it != tickets.end()) {
+            it->second.cancelBooking();
+            tickets.erase(it);
+            cout << "Ticket returned successfully." << endl;
+        }
+        else {
+            cout << "Ticket not found!" << endl;
+        }
     }
 
     void handleViewCommand() {
-        // View booked tickets logic
+        string param;
+        cin >> param;
+
+        if (isdigit(param[0])) {
+            // Assuming param is ticket ID or seat number
+            viewTicketBySeat(param);
+        }
+        else {
+            viewTicketsByPassenger(param);
+        }
+    }
+
+    void viewTicketBySeat(const string& seat) {
+        auto it = tickets.find(seat);
+        if (it != tickets.end()) {
+            it->second.displayTicket();
+        }
+        else {
+            cout << "Ticket not found!" << endl;
+        }
+    }
+
+    void viewTicketsByPassenger(const string& passenger) {
+        for (const auto& pair : tickets) {
+            if (pair.second.getPassengerName() == passenger) {
+                pair.second.displayTicket();
+            }
+        }
+    }
+
+    Airplane* findFlight(const string& date, const string& flightNo) {
+        for (auto& airplane : airplanes) {
+            if (airplane.getDate() == date && airplane.getFlightNumber() == flightNo) {
+                return &airplane;
+            }
+        }
+        return nullptr;
+    }
+
+};
+
+// Main application controller class
+class FlightBookingApp {
+private:
+    vector<Airplane> airplanes;
+    Parser parser;
+    FlightCommandHandler* commandHandler;
+
+public:
+    FlightBookingApp() : commandHandler(nullptr) {}
+
+    ~FlightBookingApp() {
+        delete commandHandler;
+    }
+
+    void run() {
+        loadFlights();
+        commandHandler = new FlightCommandHandler(airplanes);
+        commandHandler->handleCommands();
+    }
+
+private:
+    void loadFlights() {
+        vector<FlightInfo> flights = parser.parseFromFile("C:/Users/User/Documents/GitHub/OOP1/Console1/config.txt");
+        for (const auto& flight : flights) {
+            airplanes.emplace_back(flight);
+        }
     }
 };
 
