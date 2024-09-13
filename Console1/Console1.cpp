@@ -160,10 +160,23 @@ public:
     }
 
     bool isSeatValid(const string& seat) const {
-        int row = stoi(seat.substr(0, seat.size() - 1));
+        if (seat.empty() || seat.size() < 2) return false;
+
+        string rowStr = seat.substr(0, seat.size() - 1);
         char seatChar = seat.back();
-        return row > 0 && row <= 50 && seatChar >= 'A' && seatChar < 'A' + flightInfo.seatsPerRow;
+
+        int row;
+        try {
+            row = stoi(rowStr);
+        }
+        catch (const invalid_argument&) {
+            return false;
+        }
+
+        return row > 0 && row <= flightInfo.getNumRows() &&
+            seatChar >= 'A' && seatChar < 'A' + flightInfo.seatsPerRow;
     }
+
 };
 
 // Ticket class for storing booking information
