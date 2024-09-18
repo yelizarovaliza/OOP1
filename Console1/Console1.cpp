@@ -5,6 +5,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <memory>
+#include <cstdio>
 
 using namespace std;
 
@@ -26,29 +27,85 @@ struct FlightInfo {
     }
 };
 
+class FileRAII {
+private:
+    FILE* file;
+
+public:
+    FileRAII(const char* filename, const char* mode) {
+        fopen_s(&file, filename, mode);
+    }
+
+    // Destructor: Closes the file when the object goes out of scope
+    ~FileRAII() {
+        if (file) {
+            fclose(file); // Close file if it's valid
+        }
+    }
+
+    // Disable copy constructor to not have shallow copying
+    FileRAII(const FileRAII&) = delete;
+
+    // Disable assignment operator
+    FileRAII& operator=(const FileRAII&) = delete;
+
+    // Allow move constructor
+    FileRAII(FileRAII&& other) noexcept : file(other.file) {
+        other.file = nullptr;
+    }
+
+    //move assignment operator
+    FileRAII& operator=(FileRAII&& other) noexcept {
+        if (this != &other) {
+            if (file) {
+                fclose(file); // Close old resource
+            }
+            file = other.file;
+            other.file = nullptr;
+        }
+        return *this;
+    }
+
+    //  check if the file is successfully opened
+    bool isValid() const {
+        return file != nullptr;
+    }
+
+    // Get pointer for reading or writing
+    FILE* getFile() const {
+        return file;
+    }
+};
+
 // Parser class for reading and parsing flight data from a file
 class Parser {
 public:
     vector<FlightInfo> parseFromFile(const string& filename) {
-        ifstream file(filename);
-        if (!file.is_open()) {
+        FileRAII fileRAII(filename.c_str(), "r");
+        if (!fileRAII.isValid()) {
             cerr << "Error opening file: " << filename << endl;
             return {};
         }
 
+        FILE* file = fileRAII.getFile();
+
         vector<FlightInfo> flights;
         int numberOfRecords;
-        file >> numberOfRecords;
-        file.ignore(); // Ignore newline character after numberOfRecords
+
+        fscanf_s(file, "%d", &numberOfRecords); // Read number of records
+        fgetc(file); 
 
         for (int i = 0; i < numberOfRecords; ++i) {
             FlightInfo flight;
-            file >> flight.date >> flight.flightNumber >> flight.seatsPerRow;
-            file.ignore(); // Ignore the remaining newline
+            char date[11], flightNumber[10];
+            fscanf_s(file, "%10s %9s %d", date, (unsigned)_countof(date), flightNumber, (unsigned)_countof(flightNumber), &flight.seatsPerRow);
+            flight.date = string(date);
+            flight.flightNumber = string(flightNumber);
+            fgetc(file); // Consume the newline
 
-            string rowPriceData;
-            getline(file, rowPriceData);
-            parseRowPrices(rowPriceData, flight);
+            char rowPriceData[100];
+            fgets(rowPriceData, sizeof(rowPriceData), file); // Read the entire row-price line
+            parseRowPrices(string(rowPriceData), flight);    // Parse row prices
             flights.push_back(flight);
         }
 
